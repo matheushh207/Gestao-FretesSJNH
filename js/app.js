@@ -1,0 +1,500 @@
+// CONFIGURAÇÕES
+const CONFIG = {
+    SPREADSHEET_ID: '1-ijXa2yrUQElotiL8dJcVSloUZmOIKhh53S8J6PlbTo',
+    API_KEY: 'AIzaSyCf6NYMH3mzRDj_be974nw2g6mIbaAAr_k',
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbygo45yw51FARTHqcAB7SG2OH8EDoYmfWbfGRl1wxJr_EvKiKk1I0bE5A_oFow-2sp-ww/exec',
+    SHEET_CLIENTES: 'Clientes',
+    SHEET_FRETES: 'Fretes',
+    SHEET_RESUMO: 'Resumo'
+};
+
+let dadosGlobais = {
+    clientes: [],
+    fretes: [],
+    filtroAtual: 'nao-faturado',
+    searchTerm: '',
+    filterStatus: ''
+};
+
+// INICIALIZAÇÃO
+document.addEventListener('DOMContentLoaded', () => {
+    inicializarEventos();
+    carregarDados();
+});
+
+function inicializarEventos() {
+    // Upload PDF
+    document.getElementById('btnImportarPDF').addEventListener('click', abrirModalUpload);
+    document.getElementById('uploadArea').addEventListener('click', () => {
+        document.getElementById('filePDF').click();
+    });
+    document.getElementById('filePDF').addEventListener('change', handleFilePDF);
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            mudarAba(e.target.dataset.tab);
+        });
+    });
+
+    // Busca e Filtros
+    document.getElementById('searchCliente').addEventListener('input', (e) => {
+        dadosGlobais.searchTerm = e.target.value.toLowerCase();
+        renderizarDados();
+    });
+
+    document.getElementById('filterStatus').addEventListener('change', (e) => {
+        dadosGlobais.filterStatus = e.target.value;
+        renderizarDados();
+    });
+
+    // Export e Recarregar
+    document.getElementById('btnRecarregar').addEventListener('click', carregarDados);
+    document.getElementById('btnExportarDados').addEventListener('click', exportarDados);
+}
+
+function abrirModalUpload() {
+    document.getElementById('modalUpload').classList.remove('hidden');
+}
+
+function fecharModal() {
+    document.getElementById('modalUpload').classList.add('hidden');
+    document.getElementById('filePDF').value = '';
+    document.getElementById('previewDados').classList.add('hidden');
+}
+
+async function handleFilePDF(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        const { clientes, fretes } = await extrairDadosPDF(file);
+        exibirPreviewDados(clientes);
+
+        document.getElementById('btnConfirmarImportacao').disabled = false;
+        document.getElementById('btnConfirmarImportacao').onclick = () => confirmarImportacao(clientes);
+
+    } catch (error) {
+        alert('Erro ao processar PDF: ' + error.message);
+    }
+}
+
+function exibirPreviewDados(clientes) {
+    const tbody = document.querySelector('#tabelaPreview tbody');
+    tbody.innerHTML = '';
+
+    clientes.slice(0, 10).forEach(cliente => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${cliente.nome}</td>
+            <td>${cliente.cidade}</td>
+            <td>${cliente.tipo}</td>
+            <td>${cliente.fretes ? cliente.fretes.length : 0}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('previewDados').classList.remove('hidden');
+}
+
+async function confirmarImportacao(clientes) {
+    try {
+        mostrarCarregamento(true);
+        await sincronizarComSheets(clientes);
+        mostrarMensagem('sucesso', '✓ Importação realizada com sucesso!');
+        fecharModal();
+        await carregarDados();
+    } catch (error) {
+        mostrarMensagem('erro', 'Erro na importação: ' + error.message);
+    } finally {
+        mostrarCarregamento(false);
+    }
+}
+
+async function carregarDados() {
+    try {
+        mostrarCarregamento(true);
+        dadosGlobais.clientes = await buscarDadosSheet('Clientes');
+        dadosGlobais.fretes = await buscarDadosSheet('Fretes');
+        renderizarDados();
+        atualizarTimestamp();
+    } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        mostrarMensagem('erro', 'Erro ao carregar dados');
+    } finally {
+        mostrarCarregamento(false);
+    }
+}
+
+function renderizarDados() {
+    const tab = dadosGlobais.filtroAtual;
+
+    if (tab === 'nao-faturado') {
+        renderizarClientesPorTipo('NAO-FATURADO', 'gridNaoFaturado');
+    } else if (tab === 'faturado') {
+        renderizarClientesPorTipo('FATURADO', 'gridFaturado');
+    } else if (tab === 'todos') {
+        renderizarTabelaTodos();
+    } else if (tab === 'dashboard') {
+        renderizarDashboard();
+    }
+}
+
+function renderizarClientesPorTipo(tipo, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Lógica: FATURADO pega quem tem Tipo_Faturamento === 'FATURADO'
+    // NAO-FATURADO pega todo o resto
+    let clientesFiltrados = dadosGlobais.clientes.filter(c => {
+        const t = (c.Tipo_Faturamento || '').toUpperCase();
+        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+
+        if (tipo === 'FATURADO') return ehFaturado;
+        return !ehFaturado; // Não Faturado pega o resto
+    });
+
+    if (dadosGlobais.searchTerm) {
+        clientesFiltrados = clientesFiltrados.filter(c =>
+            c.Nome.toLowerCase().includes(dadosGlobais.searchTerm) || c.ID_Cliente.toString().includes(dadosGlobais.searchTerm)
+        );
+    }
+
+    clientesFiltrados.forEach(cliente => {
+        const fretes = (dadosGlobais.fretes || []).filter(f =>
+            f.ID_Cliente == cliente.ID_Cliente && f.Status_Pagamento === 'ABERTO'
+        );
+        const totalAberto = fretes.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
+
+        const card = document.createElement('div');
+        const tipoClass = tipo === 'FATURADO' ? 'fat' : 'nao-fat';
+        card.className = `cliente-card ${tipoClass}`;
+
+        card.innerHTML = `
+            <div class="card-header-flex">
+                <h3>${cliente.Nome}</h3>
+                <span class="id-badge">#${cliente.ID_Cliente}</span>
+            </div>
+            <div class="cliente-info">
+                <p>📍 <strong>Cidade:</strong> ${cliente.Cidade}</p>
+                <p>📄 <strong>Documentos:</strong> ${fretes.length} pendentes</p>
+                <div class="obs-area" style="background: #fffbe6; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; border-left: 3px solid #ffe58f; font-size: 0.85rem; min-height: 30px;">
+                    <strong>Obs:</strong> ${cliente.Observacao || '<i>Sem observação</i>'}
+                </div>
+            </div>
+            <div class="valor-aberto">R$ ${totalAberto.toFixed(2)}</div>
+            <div class="cliente-actions">
+                <button class="btn btn-secondary" onclick="editarObservacao(${cliente.ID_Cliente})" title="Adicionar Observação">📝 OBS</button>
+                ${tipo !== 'FATURADO' ?
+                `<button class="btn btn-info" onclick="verDocumentos(${cliente.ID_Cliente})" style="background: #722ed1;">📄 CTES</button>
+                     <button class="btn btn-info" onclick="gerarCobranca(${cliente.ID_Cliente})" style="background: #1890ff;">📱 COBRAR</button>
+                     <button class="btn btn-primary" onclick="marcarPago(${cliente.ID_Cliente})" style="width: 100%; margin-top: 0.5rem;">✓ BAIXA</button>`
+                : '<span style="color: var(--verde); font-weight: bold; width: 100%; text-align: center;">✓ PROCESSADO</span>'
+            }
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    if (clientesFiltrados.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; background: white; border-radius: 12px; border: 2px dashed #ccc;">
+                <p style="font-size: 1.2rem; color: #666;">Nenhum cliente encontrado.</p>
+            </div>
+        `;
+    }
+}
+
+// FUNÇÕES DE MODAL CUSTOMIZADO
+function abrirCustomModal(titulo, corpo, confirmarTexto = 'ENTENDI', mostrarCancelar = false, callback = null) {
+    const modal = document.getElementById('customModal');
+    document.getElementById('modalTitle').textContent = titulo;
+    document.getElementById('modalBody').innerHTML = corpo;
+
+    const btnConfirmar = document.getElementById('btnModalConfirm');
+    const btnCancelar = document.getElementById('btnModalCancel');
+
+    btnConfirmar.textContent = confirmarTexto;
+    btnConfirmar.onclick = () => {
+        fecharCustomModal();
+        if (callback) callback(true);
+    };
+
+    if (mostrarCancelar) {
+        btnCancelar.style.display = 'block';
+        btnCancelar.onclick = () => {
+            fecharCustomModal();
+            if (callback) callback(false);
+        };
+    } else {
+        btnCancelar.style.display = 'none';
+    }
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function fecharCustomModal() {
+    const modal = document.getElementById('customModal');
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+}
+
+// Sobrescrever funções originais modificando o código existente
+function gerarCobranca(clienteId) {
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
+    const fretes = dadosGlobais.fretes.filter(f => f.ID_Cliente == clienteId && f.Status_Pagamento === 'ABERTO');
+
+    if (fretes.length === 0) {
+        mostrarMensagem('info', 'Nenhum frete em aberto');
+        return;
+    }
+
+    const total = fretes.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
+
+    const listaCtes = fretes.map(f => {
+        const dataApenas = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
+        return `📄 CTe: ${f.Numero_CTE} (${dataApenas})`;
+    }).join('\n');
+
+    const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
+
+    navigator.clipboard.writeText(mensagem).then(() => {
+        mostrarMensagem('sucesso', 'Mensagem copiada!');
+        abrirCustomModal("📱 COPIADO PARA WHATSAPP", mensagem.replace(/\n/g, '<br>'));
+    });
+}
+
+function verDocumentos(clienteId) {
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
+    const fretes = dadosGlobais.fretes.filter(f => f.ID_Cliente == clienteId && f.Status_Pagamento === 'ABERTO');
+
+    if (fretes.length === 0) {
+        mostrarMensagem('info', 'Nenhum documento em aberto');
+        return;
+    }
+
+    const listaHtml = fretes.map(f => {
+        const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
+        return `<div style="padding: 10px; background: #f0f2f5; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid var(--azul-claro);">
+            <strong>📄 CTe: ${f.Numero_CTE}</strong><br>
+            📅 Data: ${data} | 💰 Valor: <strong>R$ ${parseFloat(f.Valor_Frete).toFixed(2)}</strong>
+        </div>`;
+    }).join('');
+
+    abrirCustomModal(`📄 DOCUMENTOS - ${cliente.Nome}`, `<div style="max-height: 400px; overflow-y: auto; padding-right: 5px;">${listaHtml}</div>`);
+}
+
+async function editarObservacao(clienteId) {
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
+
+    // Para simplificar o prompt customizado sem criar um input complexo agora,
+    // vamos usar um modal com um campo de texto simples inserido no body.
+    const corpoHtml = `
+        <p style="margin-bottom: 10px;">Digite a nova observação para <strong>${cliente.Nome}</strong>:</p>
+        <textarea id="promptObs" class="input-filter" style="width: 100%; height: 100px; padding: 10px; border-radius: 15px;">${cliente.Observacao || ''}</textarea>
+    `;
+
+    abrirCustomModal("📝 EDITAR OBSERVAÇÃO", corpoHtml, "SALVAR", true, async (confirmou) => {
+        if (confirmou) {
+            const novaObs = document.getElementById('promptObs').value;
+            try {
+                mostrarCarregamento(true);
+                await atualizarClienteSheet(clienteId, { Observacao: novaObs });
+                mostrarMensagem('sucesso', 'Observação salva!');
+                await carregarDados();
+            } catch (error) {
+                mostrarMensagem('erro', 'Erro ao salvar observação');
+            } finally {
+                mostrarCarregamento(false);
+            }
+        }
+    });
+}
+
+function renderizarTabelaTodos() {
+    const tbody = document.querySelector('#tabelaTodos tbody');
+    tbody.innerHTML = '';
+
+    let fretesFiltrados = dadosGlobais.fretes;
+
+    if (dadosGlobais.searchTerm) {
+        fretesFiltrados = fretesFiltrados.filter(f => {
+            const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+            return cliente && (cliente.Nome.toLowerCase().includes(dadosGlobais.searchTerm) || cliente.ID_Cliente.toString().includes(dadosGlobais.searchTerm));
+        });
+    }
+
+    if (dadosGlobais.filterStatus) {
+        fretesFiltrados = fretesFiltrados.filter(f => f.Status_Pagamento === dadosGlobais.filterStatus);
+    }
+
+    const agrupados = {};
+    fretesFiltrados.forEach(f => {
+        const key = `${f.ID_Cliente}_${f.Status_Pagamento}`;
+        if (!agrupados[key]) {
+            agrupados[key] = {
+                idCliente: f.ID_Cliente,
+                status: f.Status_Pagamento,
+                total: 0,
+                qtd: 0,
+                data: f.Data_Emissao
+            };
+        }
+        agrupados[key].total += parseFloat(f.Valor_Frete || 0);
+        agrupados[key].qtd += 1;
+    });
+
+    Object.values(agrupados).forEach(item => {
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == item.idCliente);
+        const t = (cliente?.Tipo_Faturamento || '').toUpperCase();
+        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+
+        // Se o cliente for faturado, forçamos o status para PAGO na visualização
+        const statusParaExibir = ehFaturado ? 'PAGO' : item.status;
+        const classeStatus = statusParaExibir.toLowerCase();
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${cliente?.Nome || 'Desconhecido'}</td>
+            <td>${item.qtd} docs</td>
+            <td>${item.data}</td>
+            <td>R$ ${item.total.toFixed(2)}</td>
+            <td><strong class="status-${classeStatus}">${statusParaExibir}</strong></td>
+            <td>
+                ${(statusParaExibir === 'ABERTO') ?
+                `<button class="btn btn-secondary" onclick="marcarPago(${item.idCliente})">Dar Baixa</button>` :
+                '✓ PAGO'}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function marcarPago(clienteId) {
+    const fretes = dadosGlobais.fretes.filter(f => f.ID_Cliente == clienteId && f.Status_Pagamento === 'ABERTO');
+    if (fretes.length === 0) return;
+
+    abrirCustomModal("❓ CONFIRMAR BAIXA", `Deseja confirmar a baixa de ${fretes.length} documento(s) como PAGO?`, "CONFIRMAR", true, async (confirmou) => {
+        if (confirmou) {
+            try {
+                mostrarCarregamento(true);
+                for (const frete of fretes) {
+                    await atualizarFreteSheet(frete.ID_Frete, { Status_Pagamento: 'PAGO' });
+                }
+                await atualizarClienteSheet(clienteId, { Tipo_Faturamento: 'FATURADO' });
+                mostrarMensagem('sucesso', 'Movido para Faturado.');
+                await carregarDados();
+            } catch (error) {
+                mostrarMensagem('erro', 'Erro na baixa');
+            } finally {
+                mostrarCarregamento(false);
+            }
+        }
+    });
+}
+
+function renderizarDashboard() {
+    // Melhorar cálculo considerando que FATURADO/FAT = PAGO
+    const fretesCompletos = dadosGlobais.fretes.map(f => {
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+        const t = (cliente?.Tipo_Faturamento || '').toUpperCase();
+        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        return {
+            ...f,
+            statusReal: ehFaturado ? 'PAGO' : f.Status_Pagamento
+        };
+    });
+
+    const fretesAbertos = fretesCompletos.filter(f => f.statusReal === 'ABERTO');
+    const totalAberto = fretesAbertos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
+
+    const fretesPagos = fretesCompletos.filter(f => f.statusReal === 'PAGO');
+    const totalPago = fretesPagos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
+
+    const qtdClientesAbertos = new Set(fretesAbertos.map(f => f.ID_Cliente)).size;
+
+    const grid = document.querySelector('.dashboard-grid');
+    grid.innerHTML = `
+        <div class="card-stat highlight" style="border-top-color: #e74c3c;">
+            <h3>📂 TOTAL PENDENTE</h3>
+            <p class="valor" style="color: #e74c3c">R$ ${totalAberto.toFixed(2)}</p>
+            <p class="sub-valor">📦 ${fretesAbertos.length} Documentos / ${qtdClientesAbertos} Clientes</p>
+        </div>
+        <div class="card-stat" style="border-top-color: var(--verde);">
+            <h3>✅ TOTAL PAGO (MÊS)</h3>
+            <p class="valor" style="color: var(--verde)">R$ ${totalPago.toFixed(2)}</p>
+            <p class="sub-valor">📦 ${fretesPagos.length} Documentos processados</p>
+        </div>
+    `;
+
+    const oldProg = document.querySelector('.progress-section');
+    if (oldProg) oldProg.remove();
+
+    const totalGeral = totalAberto + totalPago;
+    const percentual = totalGeral > 0 ? (totalPago / totalGeral * 100) : 0;
+
+    const progHtml = `
+        <div class="progress-section" style="margin-top: 2rem; background: white; padding: 2rem; border-radius: 20px; box-shadow: var(--sombra);">
+            <h3 style="margin-bottom: 1rem; color: var(--azul-marinho);">📊 PERCENTUAL DE RECEBIMENTO</h3>
+            <div style="height: 35px; background: #eee; border-radius: 20px; overflow: hidden; display: flex; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
+                <div style="width: ${percentual}%; background: linear-gradient(90deg, var(--verde) 0%, var(--verde-claro) 100%); transition: width 1s ease-in-out;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.8rem;">
+                <p style="font-weight: 800; font-size: 1.1rem; color: var(--verde);">${percentual.toFixed(1)}% Recebido</p>
+                <p style="font-weight: 600; color: #666;">Meta: 100%</p>
+            </div>
+        </div>
+    `;
+    grid.insertAdjacentHTML('afterend', progHtml);
+}
+
+function mudarAba(novaAba) {
+    dadosGlobais.filtroAtual = novaAba;
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`[data-tab="${novaAba}"]`).classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+    const targetSet = document.getElementById(`tab-${novaAba}`);
+    if (targetSet) targetSet.classList.add('active');
+    renderizarDados();
+}
+
+function mostrarMensagem(tipo, mensagem) {
+    const div = document.createElement('div');
+    div.style.cssText = `position: fixed; top: 20px; right: 20px; padding: 1rem; background: ${tipo === 'sucesso' ? '#4CAF50' : '#f44336'}; color: white; border-radius: 8px; z-index: 9999; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.15);`;
+    div.textContent = mensagem;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+}
+
+function mostrarCarregamento(ativo) {
+    let loader = document.getElementById('loader');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'loader';
+        loader.style.cssText = 'position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; color:white; font-weight:bold;';
+        loader.innerHTML = 'Carregando...';
+        document.body.appendChild(loader);
+    }
+    loader.style.display = ativo ? 'flex' : 'none';
+}
+
+function atualizarTimestamp() {
+    const el = document.getElementById('ultimaAtualizacao');
+    if (el) el.textContent = new Date().toLocaleString('pt-BR');
+}
+
+function exportarDados() {
+    let csv = 'Cliente,CTe,Data,Valor,Status\n';
+    dadosGlobais.fretes.forEach(f => {
+        const c = dadosGlobais.clientes.find(cli => cli.ID_Cliente == f.ID_Cliente);
+        csv += `"${c?.Nome}",${f.Numero_CTE},${f.Data_Emissao},${f.Valor_Frete},${f.Status_Pagamento}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fretes_export.csv';
+    a.click();
+}

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Fretes - SÃO JOÃO ENCOMENDAS</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🚚 GESTOR DE FRETES</h1>
+                <p>SÃO JOÃO ENCOMENDAS LTDA</p>
+            </div>
+            <div class="header-actions">
+                <button id="btnImportarPDF" class="btn btn-primary">
+                    📤 IMPORTAR PDF
+                </button>
+                <button id="btnRecarregar" class="btn btn-info" style="background: var(--azul-claro);">
+                    🔄 RECARREGAR
+                </button>
+                <button id="btnExportarDados" class="btn btn-secondary">
+                    📥 EXPORTAR DADOS
+                </button>
+
+            </div>
+        </header>
+
+        <!-- UPLOAD MODAL -->
+        <div id="modalUpload" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>IMPORTAR RELATÓRIO DE FRETES</h2>
+                    <button class="btn-close" onclick="fecharModal( )">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-area" id="uploadArea">
+                        <p>📄 Arraste o PDF aqui ou clique para selecionar</p>
+                        <input type="file" id="filePDF" accept=".pdf" style="display:none;">
+                    </div>
+                    <div id="previewDados" class="preview hidden">
+                        <h3>PREVIEW DOS DADOS</h3>
+                        <table id="tabelaPreview">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Cidade</th>
+                                    <th>Tipo</th>
+                                    <th>Documentos</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="fecharModal()">CANCELAR</button>
+                    <button id="btnConfirmarImportacao" class="btn btn-primary" disabled>
+                        ✓ CONFIRMAR IMPORTAÇÃO
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- TABS -->
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="nao-faturado">
+                        ⚠️ NÃO FATURADO
+                    </button>
+                    <button class="tab-btn" data-tab="faturado">
+                        ✅ FATURADO
+                    </button>
+                    <button class="tab-btn" data-tab="todos">
+                        📊 TODOS
+                    </button>
+                    <button class="tab-btn" data-tab="dashboard">
+                        📈 DASHBOARD
+                    </button>
+                </div>
+
+                <!-- SEARCH & FILTERS -->
+                <div class="search-filters">
+                    <input type="text" id="searchCliente" placeholder="🔍 Buscar cliente..." class="input-search">
+                    <select id="filterStatus" class="input-filter">
+                        <option value="">Todos os Status</option>
+                        <option value="ABERTO">ABERTO</option>
+                        <option value="PAGO">PAGO</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- TAB CONTENT -->
+            <div class="tab-content">
+                <!-- NÃO FATURADO TAB -->
+                <div id="tab-nao-faturado" class="tab-pane active">
+                    <div class="clientes-grid" id="gridNaoFaturado"></div>
+                </div>
+
+                <!-- FATURADO TAB -->
+                <div id="tab-faturado" class="tab-pane">
+                    <div class="clientes-grid" id="gridFaturado"></div>
+                </div>
+
+                <!-- TODOS TAB -->
+                <div id="tab-todos" class="tab-pane">
+                    <table class="tabela-fretes" id="tabelaTodos">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Qtd Docs</th>
+                                <th>Data Ref.</th>
+                                <th>Valor Total</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <!-- DASHBOARD TAB -->
+                <div id="tab-dashboard" class="tab-pane">
+                    <div class="dashboard-grid">
+                        <!-- Renderizado via JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <p>Sistema de Gerenciamento de Fretes © 2026 | Última atualização: <span id="ultimaAtualizacao">--</span>
+            </p>
+        </footer>
+    </div>
+
+    <!-- MODAL CUSTOMIZADO (ALERT/PROMPT) -->
+    <div id="customModal" class="modal hidden" style="display: none; z-index: 10001;">
+        <div class="modal-content modal-premium" style="max-width: 500px; border-radius: 30px;">
+            <div id="modalHeader" class="modal-header"
+                style="border-bottom: 1px solid #eee; padding-bottom: 1rem; margin-bottom: 1rem;">
+                <h2 id="modalTitle" style="color: var(--azul-marinho); font-size: 1.5rem;">Mensagem</h2>
+            </div>
+            <div id="modalBody" class="modal-body-content"
+                style="padding: 1rem 0; line-height: 1.6; white-space: pre-wrap; font-size: 1rem; color: #444;">
+                <!-- Conteúdo -->
+            </div>
+            <div id="modalFooter" class="modal-actions"
+                style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
+                <button id="btnModalCancel" class="btn btn-secondary" onclick="fecharCustomModal()"
+                    style="display: none;">CANCELAR</button>
+                <button id="btnModalConfirm" class="btn btn-primary" onclick="fecharCustomModal()">ENTENDI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="js/pdf-processor.js"></script>
+    <script src="js/sheets-sync.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
