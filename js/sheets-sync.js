@@ -63,7 +63,7 @@ async function atualizarClienteSheet(clienteId, novosDados) {
             body: JSON.stringify({
                 acao: 'atualizar_cliente',
                 clienteId: clienteId,
-                dados: novosDados
+                ...novosDados
             })
         });
 
@@ -85,7 +85,7 @@ async function atualizarFreteSheet(freteId, novosDados) {
             body: JSON.stringify({
                 acao: 'atualizar_frete',
                 freteId: freteId,
-                dados: novosDados
+                ...novosDados
             })
         });
 
