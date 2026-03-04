@@ -180,7 +180,7 @@ function renderizarClientesPorTipo(tipo, containerId) {
                 <p>📍 <strong>Cidade:</strong> ${cliente.Cidade}</p>
                 <p>📄 <strong>Documentos:</strong> ${fretes.length} pendentes</p>
                 <div class="obs-area" style="background: #fffbe6; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; border-left: 3px solid #ffe58f; font-size: 0.85rem; min-height: 30px;">
-                    <strong>Obs:</strong> ${cliente.Observacao || '<i>Sem observação</i>'}
+                    <strong>Obs:</strong> ${cliente.Observacao || cliente['Observação'] || '<i>Sem observação</i>'}
                 </div>
             </div>
             <div class="valor-aberto">R$ ${totalAberto.toFixed(2)}</div>
@@ -259,7 +259,8 @@ function gerarCobranca(clienteId) {
         return `📄 CTe: ${f.Numero_CTE} (${dataApenas}) - *R$ ${valorIndividual}*`;
     }).join('\n');
 
-    const obsTexto = cliente.Observacao ? `\n\n*OBS:* ${cliente.Observacao}` : '';
+    const observacao = cliente.Observacao || cliente['Observação'];
+    const obsTexto = observacao ? `\n\n*OBS:* ${observacao}` : '';
     const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}${obsTexto}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
 
     navigator.clipboard.writeText(mensagem).then(() => {
@@ -295,7 +296,7 @@ async function editarObservacao(clienteId) {
     // vamos usar um modal com um campo de texto simples inserido no body.
     const corpoHtml = `
         <p style="margin-bottom: 10px;">Digite a nova observação para <strong>${cliente.Nome}</strong>:</p>
-        <textarea id="promptObs" class="input-filter" style="width: 100%; height: 100px; padding: 10px; border-radius: 15px;">${cliente.Observacao || ''}</textarea>
+        <textarea id="promptObs" class="input-filter" style="width: 100%; height: 100px; padding: 10px; border-radius: 15px;">${cliente.Observacao || cliente['Observação'] || ''}</textarea>
     `;
 
     abrirCustomModal("📝 EDITAR OBSERVAÇÃO", corpoHtml, "SALVAR", true, async (confirmou) => {
@@ -303,7 +304,10 @@ async function editarObservacao(clienteId) {
             const novaObs = document.getElementById('promptObs').value;
             try {
                 mostrarCarregamento(true);
-                await atualizarClienteSheet(clienteId, { Observacao: novaObs });
+                await atualizarClienteSheet(clienteId, {
+                    Observacao: novaObs,
+                    'Observação': novaObs
+                });
                 mostrarMensagem('sucesso', 'Observação salva!');
                 await carregarDados();
             } catch (error) {

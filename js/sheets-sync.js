@@ -55,7 +55,7 @@ async function buscarDadosSheet(abaNome) {
 // ✅ ATUALIZAR CLIENTE
 async function atualizarClienteSheet(clienteId, novosDados) {
     try {
-        console.log('📝 Atualizando cliente na planilha:', clienteId);
+        console.log('📝 Atualizando cliente na planilha:', clienteId, novosDados);
 
         await fetch(CONFIG.APPS_SCRIPT_URL, {
             method: 'POST',
@@ -67,6 +67,7 @@ async function atualizarClienteSheet(clienteId, novosDados) {
             })
         });
 
+        console.log('✅ Comando de atualização enviado para o Apps Script');
         return { sucesso: true };
     } catch (error) {
         console.error('❌ Erro ao atualizar cliente:', error);
@@ -77,7 +78,7 @@ async function atualizarClienteSheet(clienteId, novosDados) {
 // ✅ ATUALIZAR FRETE
 async function atualizarFreteSheet(freteId, novosDados) {
     try {
-        console.log('📝 Atualizando frete na planilha:', freteId);
+        console.log('📝 Atualizando frete na planilha:', freteId, novosDados);
 
         await fetch(CONFIG.APPS_SCRIPT_URL, {
             method: 'POST',
@@ -89,6 +90,7 @@ async function atualizarFreteSheet(freteId, novosDados) {
             })
         });
 
+        console.log('✅ Comando de atualização de frete enviado');
         return { sucesso: true };
     } catch (error) {
         console.error('❌ Erro ao atualizar frete:', error);
@@ -110,9 +112,10 @@ function exportarParaGoogleSheets() {
     const fretes = JSON.parse(fretesLocal);
 
     // Gerar CSV para Clientes
-    let csvClientes = 'ID_Cliente\tNome\tCidade\tUF\tTipo_Faturamento\tData_Criacao\tAtivo\tObservacao\n';
+    let csvClientes = 'ID_Cliente\tNome\tCidade\tUF\tTipo_Faturamento\tData_Criacao\tAtivo\tObservação\n';
     clientes.forEach(c => {
-        csvClientes += `${c.id}\t${c.nome}\t${c.cidade}\t${c.uf}\t${c.tipo}\t${new Date().toLocaleDateString()}\tSIM\t${c.observacao || ''}\n`;
+        const observacao = c.observacao || c.Observacao || c['Observação'] || '';
+        csvClientes += `${c.id}\t${c.nome}\t${c.cidade}\t${c.uf}\t${c.tipo}\t${new Date().toLocaleDateString()}\tSIM\t${observacao}\n`;
     });
 
     // Gerar CSV para Fretes
