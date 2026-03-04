@@ -255,10 +255,12 @@ function gerarCobranca(clienteId) {
 
     const listaCtes = fretes.map(f => {
         const dataApenas = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
-        return `📄 CTe: ${f.Numero_CTE} (${dataApenas})`;
+        const valorIndividual = parseFloat(f.Valor_Frete || 0).toFixed(2);
+        return `📄 CTe: ${f.Numero_CTE} (${dataApenas}) - *R$ ${valorIndividual}*`;
     }).join('\n');
 
-    const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
+    const obsTexto = cliente.Observacao ? `\n\n*OBS:* ${cliente.Observacao}` : '';
+    const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}${obsTexto}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
 
     navigator.clipboard.writeText(mensagem).then(() => {
         mostrarMensagem('sucesso', 'Mensagem copiada!');
