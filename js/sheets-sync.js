@@ -110,9 +110,9 @@ function exportarParaGoogleSheets() {
     const fretes = JSON.parse(fretesLocal);
 
     // Gerar CSV para Clientes
-    let csvClientes = 'ID_Cliente\tNome\tCidade\tUF\tTipo_Faturamento\tData_Criacao\tAtivo\n';
+    let csvClientes = 'ID_Cliente\tNome\tCidade\tUF\tTipo_Faturamento\tData_Criacao\tAtivo\tObservacao\n';
     clientes.forEach(c => {
-        csvClientes += `${c.id}\t${c.nome}\t${c.cidade}\t${c.uf}\t${c.tipo}\t${new Date().toLocaleDateString()}\tSIM\n`;
+        csvClientes += `${c.id}\t${c.nome}\t${c.cidade}\t${c.uf}\t${c.tipo}\t${new Date().toLocaleDateString()}\tSIM\t${c.observacao || ''}\n`;
     });
 
     // Gerar CSV para Fretes

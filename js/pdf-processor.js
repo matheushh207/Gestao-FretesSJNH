@@ -85,6 +85,7 @@ function processarTexto(texto) {
                     cidade: cidade,
                     uf: uf,
                     tipo: tipo,
+                    observacao: '',
                     fretes: []
                 };
                 clientes.push(clientesMap[id]);
