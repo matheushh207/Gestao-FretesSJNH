@@ -63,7 +63,7 @@ async function atualizarClienteSheet(clienteId, novosDados) {
             body: JSON.stringify({
                 acao: 'atualizar_cliente',
                 clienteId: clienteId,
-                ...novosDados
+                dados: novosDados
             })
         });
 
@@ -86,7 +86,7 @@ async function atualizarFreteSheet(freteId, novosDados) {
             body: JSON.stringify({
                 acao: 'atualizar_frete',
                 freteId: freteId,
-                ...novosDados
+                dados: novosDados
             })
         });
 
@@ -114,7 +114,7 @@ function exportarParaGoogleSheets() {
     // Gerar CSV para Clientes
     let csvClientes = 'ID_Cliente\tNome\tCidade\tUF\tTipo_Faturamento\tData_Criacao\tAtivo\tObservação\n';
     clientes.forEach(c => {
-        const observacao = c.observacao || c.Observacao || c['Observação'] || '';
+        const observacao = c.observacao || c.Observacao || c['Observação'] || c.obs || c.OBS || '';
         csvClientes += `${c.id}\t${c.nome}\t${c.cidade}\t${c.uf}\t${c.tipo}\t${new Date().toLocaleDateString()}\tSIM\t${observacao}\n`;
     });
 
