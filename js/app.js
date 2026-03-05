@@ -413,11 +413,13 @@ function renderizarTabelaTodos() {
 
     // REGRA: Mostrar apenas clientes que NÃO são faturados (mesma lógica do Não Faturado)
     fretesFiltrados = fretesFiltrados.filter(f => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString() == f.ID_Cliente.toString());
         if (!cliente) return false;
+
+        // Só filtramos fora se o tipo for explicitamente FATURADO (Empresas que não controlamos)
         const t = (cliente.Tipo_Faturamento || '').toUpperCase();
-        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
-        return !ehFaturado;
+        const ehEmpresaFaturada = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        return !ehEmpresaFaturada;
     });
 
     if (dadosGlobais.filterStatus) {
@@ -449,11 +451,10 @@ function renderizarTabelaTodos() {
     });
 
     Object.values(agrupados).forEach(item => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == item.idCliente);
-        const t = (cliente?.Tipo_Faturamento || '').toUpperCase();
-        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString() == item.idCliente.toString());
+        const statusParaExibir = item.status;
+        const classeStatus = statusParaExibir.toLowerCase();
 
-        // Se o cliente for faturado, forçamos o status para PAGO na visualização
         const dataFormatada = formatarDataBR(item.data);
         const tr = document.createElement('tr');
 
@@ -491,8 +492,9 @@ async function marcarPago(clienteId) {
                 for (const frete of fretes) {
                     await atualizarFreteSheet(frete.ID_Frete, { Status_Pagamento: 'PAGO' });
                 }
-                await atualizarClienteSheet(clienteId, { Tipo_Faturamento: 'FATURADO' });
-                mostrarMensagem('sucesso', 'Movido para Faturado.');
+                // REMOVIDO: Não devemos mudar o tipo do cliente para FATURADO ao dar baixa, 
+                // pois ele deixa de ser um cliente "Semanal" controlado para ser "Empresa"
+                mostrarMensagem('sucesso', 'Baixa realizada com sucesso!');
                 await carregarDados();
             } catch (error) {
                 mostrarMensagem('erro', 'Erro na baixa');
@@ -513,7 +515,7 @@ function renderizarDashboard() {
         fretesFiltrados = fretesFiltrados.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
     }
 
-    // Pegar apenas clientes que NÃO são Faturados/Pagos
+    // Pegar apenas clientes que NÃO são Empresas Faturadas (os que controlamos)
     const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
         const t = (c.Tipo_Faturamento || '').toUpperCase();
         return !(t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
