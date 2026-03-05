@@ -180,12 +180,18 @@ function obterObservacao(cliente) {
 function obterValorPelaChave(obj, chaveProcurada) {
     if (!obj) return null;
     const keys = Object.keys(obj);
+    const target = chaveProcurada.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    // Lista de variações comuns para chaves importantes
+    let variacoes = [target];
+    if (target.includes('comprovante')) variacoes.push('link', 'arquivo', 'compr', 'voucher', 'drive');
+    if (target.includes('tipo')) variacoes.push('faturamento', 'cat', 'classificacao');
+
     const keyMatch = keys.find(k => {
         const normalized = k.toString().trim().toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const target = chaveProcurada.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return normalized === target || normalized.includes(target);
+        return variacoes.some(v => normalized === v || normalized.includes(v));
     });
     return keyMatch ? obj[keyMatch] : null;
 }
@@ -208,23 +214,25 @@ function renderizarClientesPorTipo(tipo, containerId) {
 
     // Lógica: FATURADO pega quem tem Tipo_Faturamento === 'FATURADO'
     // NAO-FATURADO pega todo o resto
-    let clientesFiltrados = dadosGlobais.clientes.filter(c => {
-        const t = (c.Tipo_Faturamento || '').toUpperCase();
-        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+    clientesFiltrados = clientesFiltrados.filter(c => {
+        const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
+        const ehEmpresaFaturada = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
 
-        if (tipo === 'FATURADO') return ehFaturado;
-        return !ehFaturado; // Não Faturado pega o resto
+        if (tipo === 'FATURADO') return ehEmpresaFaturada;
+        return !ehEmpresaFaturada; // Não Faturado pega o resto
     });
 
     if (dadosGlobais.searchTerm) {
         clientesFiltrados = clientesFiltrados.filter(c =>
-            c.Nome.toLowerCase().includes(dadosGlobais.searchTerm) || c.ID_Cliente.toString().includes(dadosGlobais.searchTerm)
+            c.Nome.toLowerCase().includes(dadosGlobais.searchTerm) ||
+            c.ID_Cliente.toString().trim() === dadosGlobais.searchTerm.trim()
         );
     }
 
     clientesFiltrados.forEach(cliente => {
         let fretes = (dadosGlobais.fretes || []).filter(f =>
-            f.ID_Cliente == cliente.ID_Cliente && f.Status_Pagamento === 'ABERTO'
+            f.ID_Cliente.toString().trim() === cliente.ID_Cliente.toString().trim() &&
+            f.Status_Pagamento.toString().toUpperCase() === 'ABERTO'
         );
 
         // Filtro de Data
@@ -322,8 +330,11 @@ function fecharCustomModal() {
 
 // Sobrescrever funções originais modificando o código existente
 function gerarCobranca(clienteId) {
-    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
-    const fretes = dadosGlobais.fretes.filter(f => f.ID_Cliente == clienteId && f.Status_Pagamento === 'ABERTO');
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === clienteId.toString().trim());
+    const fretes = dadosGlobais.fretes.filter(f =>
+        f.ID_Cliente.toString().trim() === clienteId.toString().trim() &&
+        f.Status_Pagamento.toString().toUpperCase() === 'ABERTO'
+    );
 
     if (fretes.length === 0) {
         mostrarMensagem('info', 'Nenhum frete em aberto');
@@ -451,8 +462,8 @@ function renderizarTabelaTodos() {
     });
 
     Object.values(agrupados).forEach(item => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString() == item.idCliente.toString());
-        const statusParaExibir = item.status;
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === item.idCliente.toString().trim());
+        const statusParaExibir = item.status.toString().toUpperCase();
         const classeStatus = statusParaExibir.toLowerCase();
 
         const dataFormatada = formatarDataBR(item.data);
