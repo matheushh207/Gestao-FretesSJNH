@@ -75,6 +75,28 @@ async function atualizarClienteSheet(clienteId, novosDados) {
     }
 }
 
+// ✅ REMOVER VOUCHER
+async function removerVoucherSheet(clienteId) {
+    try {
+        console.log('🗑️ Removendo comprovante do cliente:', clienteId);
+
+        await fetch(CONFIG.APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({
+                acao: 'remover_voucher',
+                clienteId: clienteId
+            })
+        });
+
+        console.log('✅ Comando de remoção enviado');
+        return { sucesso: true };
+    } catch (error) {
+        console.error('❌ Erro ao remover voucher:', error);
+        return { sucesso: false, erro: error.message };
+    }
+}
+
 // ✅ ATUALIZAR FRETE
 async function atualizarFreteSheet(freteId, novosDados) {
     try {

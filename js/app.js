@@ -217,10 +217,16 @@ function renderizarClientesPorTipo(tipo, containerId) {
         card.className = `cliente-card ${tipoClass}`;
 
         const linkComprovante = cliente.Link_Comprovante || cliente.link_comprovante;
+        const iconesVoucher = linkComprovante ? `
+            <div class="voucher-actions-inline" style="display: inline-flex; gap: 5px; margin-left: 8px;">
+                <span class="status-comprovante" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante" style="cursor:pointer;">👁️</span>
+                <span class="status-comprovante remover" onclick="removerVoucher(${cliente.ID_Cliente})" title="Remover Comprovante" style="cursor:pointer; filter: hue-rotate(140deg);">🗑️</span>
+            </div>
+        ` : '';
 
         card.innerHTML = `
             <div class="card-header-flex">
-                <h3>${cliente.Nome} ${linkComprovante ? `<span class="status-comprovante" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante">👁️</span>` : ''}</h3>
+                <h3>${cliente.Nome} ${iconesVoucher}</h3>
                 <span class="id-badge">#${cliente.ID_Cliente}</span>
             </div>
             <div class="cliente-info">
@@ -417,6 +423,12 @@ function renderizarTabelaTodos() {
         const statusParaExibir = ehFaturado ? 'PAGO' : item.status;
         const classeStatus = statusParaExibir.toLowerCase();
 
+        const linkComprovante = cliente?.Link_Comprovante || cliente?.link_comprovante;
+        const btnComprovante = linkComprovante ? `
+            <button class="btn btn-info" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante" style="background: #13c2c2; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">👁️</button>
+            <button class="btn btn-danger" onclick="removerVoucher(${item.idCliente})" title="Remover Comprovante" style="background: #ff4d4f; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px; border:none; border-radius:4px; cursor:pointer;">🗑️</button>
+        ` : '';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${cliente?.Nome || 'Desconhecido'}</td>
@@ -425,6 +437,7 @@ function renderizarTabelaTodos() {
             <td>R$ ${item.total.toFixed(2)}</td>
             <td><strong class="status-${classeStatus}">${statusParaExibir}</strong></td>
             <td>
+                ${btnComprovante}
                 ${(statusParaExibir === 'ABERTO') ?
                 `<button class="btn btn-secondary" onclick="marcarPago(${item.idCliente})">Dar Baixa</button>` :
                 '✓ PAGO'}
@@ -582,6 +595,31 @@ async function confirmarVoucher(file) {
     } finally {
         mostrarCarregamento(false);
     }
+}
+
+async function removerVoucher(clienteId) {
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
+
+    abrirCustomModal(
+        "🗑️ REMOVER COMPROVANTE",
+        `Deseja realmente apagar o comprovante de <strong>${cliente.Nome}</strong>?`,
+        "REMOVER",
+        true,
+        async (confirmou) => {
+            if (confirmou) {
+                try {
+                    mostrarCarregamento(true);
+                    await removerVoucherSheet(clienteId);
+                    mostrarMensagem('sucesso', 'Comprovante removido!');
+                    await carregarDados();
+                } catch (error) {
+                    mostrarMensagem('erro', 'Erro ao remover comprovante');
+                } finally {
+                    mostrarCarregamento(false);
+                }
+            }
+        }
+    );
 }
 
 // ============================================
