@@ -140,16 +140,23 @@ function renderizarDados() {
     }
 }
 
-// Helper para buscar observação independente da grafia na planilha
+// Helper para buscar observação independente da grafia na planilha (robusto)
 function obterObservacao(cliente) {
     if (!cliente) return '';
-    return cliente.Observacao ||
-        cliente['Observação'] ||
-        cliente.observacao ||
-        cliente.OBS ||
-        cliente.obs ||
-        cliente['OBSERVAÇÃO'] ||
-        '';
+
+    // Procura por chaves ignorando maiúsculas, minúsculas, espaços e acentos
+    const keys = Object.keys(cliente);
+    const obsKey = keys.find(k => {
+        const normalized = k.toString().trim().toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return normalized === 'observacao' || normalized === 'obs' || normalized.includes('observaca');
+    });
+
+    if (obsKey) {
+        const valor = cliente[obsKey];
+        return (valor !== undefined && valor !== null) ? valor.toString().trim() : '';
+    }
+    return '';
 }
 
 function renderizarClientesPorTipo(tipo, containerId) {
