@@ -62,7 +62,6 @@ function inicializarEventos() {
 
     // Export e Recarregar
     document.getElementById('btnRecarregar').addEventListener('click', carregarDados);
-    document.getElementById('btnExportarDados').addEventListener('click', exportarDados);
 
     // Voucher Upload Events
     document.getElementById('voucherUploadArea').addEventListener('click', () => {
