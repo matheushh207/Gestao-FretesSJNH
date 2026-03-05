@@ -131,13 +131,21 @@ async function confirmarImportacao(clientes) {
 async function carregarDados() {
     try {
         mostrarCarregamento(true);
+        // Tentar buscar via GET primeiro (que agora trataremos no script)
+        console.log('🔄 Iniciando carregamento de dados...');
         dadosGlobais.clientes = await buscarDadosSheet('Clientes');
         dadosGlobais.fretes = await buscarDadosSheet('Fretes');
+
+        console.log('✅ Dados carregados:', {
+            clientes: dadosGlobais.clientes.length,
+            fretes: dadosGlobais.fretes.length
+        });
+
         renderizarDados();
         atualizarTimestamp();
     } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        mostrarMensagem('erro', 'Erro ao carregar dados');
+        console.error('❌ Erro crítico ao carregar dados:', error);
+        mostrarMensagem('erro', 'Erro ao carregar dados. Verifique a conexão.');
     } finally {
         mostrarCarregamento(false);
     }
@@ -216,10 +224,11 @@ function renderizarClientesPorTipo(tipo, containerId) {
     // NAO-FATURADO pega todo o resto
     clientesFiltrados = clientesFiltrados.filter(c => {
         const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        const ehEmpresaFaturada = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        // REGRA: Se conter "FAT", é faturado (Empresa). Se não, é o que controlamos.
+        const ehEmpresaFaturada = t.includes('FAT') || t === 'PAGO';
 
         if (tipo === 'FATURADO') return ehEmpresaFaturada;
-        return !ehEmpresaFaturada; // Não Faturado pega o resto
+        return !ehEmpresaFaturada;
     });
 
     if (dadosGlobais.searchTerm) {
@@ -422,14 +431,13 @@ function renderizarTabelaTodos() {
         });
     }
 
-    // REGRA: Mostrar apenas clientes que NÃO são faturados (mesma lógica do Não Faturado)
+    // REGRA: Mostrar apenas clientes que NÃO são faturados (os que controlamos)
     fretesFiltrados = fretesFiltrados.filter(f => {
         const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === f.ID_Cliente.toString().trim());
         if (!cliente) return false;
 
-        // Só filtramos fora se o tipo for explicitamente FATURADO (Empresas que não controlamos)
         const t = (obterValorPelaChave(cliente, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        const ehEmpresaFaturada = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        const ehEmpresaFaturada = t.includes('FAT') || t === 'PAGO';
         return !ehEmpresaFaturada;
     });
 
@@ -473,7 +481,9 @@ function renderizarTabelaTodos() {
         const btnComprovante = linkComprovante ? `
             <button class="btn btn-info" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante" style="background: #13c2c2; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">👁️</button>
             <button class="btn btn-danger" onclick="removerVoucher(${item.idCliente})" title="Remover Comprovante" style="background: #ff4d4f; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px; border:none; border-radius:4px; cursor:pointer;">🗑️</button>
-        ` : '';
+        ` : `
+            <button class="btn btn-secondary" onclick="mostrarMensagem('info', 'Nenhum comprovante anexado para este cliente.')" title="Sem Comprovante" style="opacity: 0.5; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px; cursor: help;">👁️</button>
+        `;
 
         tr.innerHTML = `
             <td>${cliente?.Nome || 'Desconhecido'}</td>
@@ -528,8 +538,8 @@ function renderizarDashboard() {
 
     // Pegar apenas clientes que NÃO são Empresas Faturadas (os que controlamos)
     const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
-        const t = (c.Tipo_Faturamento || '').toUpperCase();
-        return !(t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
+        return !(t.includes('FAT') || t === 'PAGO');
     });
 
     // IDs dos clientes controlados (Não Faturados)
