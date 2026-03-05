@@ -594,16 +594,29 @@ async function gerarRelatorioPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // 1. Cabeçalho com Logo (Se existir logo.png em assets)
-        // Por enquanto usaremos texto premium caso a imagem demore
-        doc.setFillColor(13, 59, 102);
-        doc.rect(0, 0, 210, 40, 'F');
+        // 1. Cabeçalho com Logo (Ajustado para logo.jpeg)
+        try {
+            // Desenhar um fundo azul marinho no topo
+            doc.setFillColor(13, 59, 102);
+            doc.rect(0, 0, 210, 45, 'F');
 
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
-        doc.text("SÃO JOÃO ENCOMENDAS", 105, 20, { align: 'center' });
-        doc.setFontSize(10);
-        doc.text("RELATÓRIO DE PRESTAÇÃO DE CONTAS - FRETES", 105, 30, { align: 'center' });
+            // Adicionar a imagem da logo
+            // Nota: Usamos 10 mm de margem esquerda, 5 mm de topo, 40 mm de largura, 30 mm de altura aprox
+            doc.addImage('assets/logo.jpeg', 'JPEG', 10, 5, 45, 30);
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(20);
+            doc.text("SÃO JOÃO ENCOMENDAS", 65, 20);
+            doc.setFontSize(10);
+            doc.text("RELATÓRIO DE PRESTAÇÃO DE CONTAS - FRETES PENDENTES", 65, 30);
+        } catch (e) {
+            console.warn("Logo não encontrada ou erro ao carregar:", e);
+            doc.setFillColor(13, 59, 102);
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text("SÃO JOÃO ENCOMENDAS", 105, 20, { align: 'center' });
+        }
 
         // 2. Informações do Período
         doc.setTextColor(0, 0, 0);
@@ -611,16 +624,23 @@ async function gerarRelatorioPDF() {
         const periodo = (dadosGlobais.startDate && dadosGlobais.endDate)
             ? `${dadosGlobais.startDate.split('-').reverse().join('/')} até ${dadosGlobais.endDate.split('-').reverse().join('/')}`
             : 'Período Geral';
-        doc.text(`Período: ${periodo}`, 14, 50);
-        doc.text(`Data de Emissão: ${new Date().toLocaleString()}`, 14, 57);
+        doc.text(`Período: ${periodo}`, 14, 55);
+        doc.text(`Data de Emissão: ${new Date().toLocaleString()}`, 14, 62);
 
-        // 3. Tabela de Dados (Usando apenas fretes filtrados)
-        let fretesParaRelatorio = dadosGlobais.fretes;
+        // 3. Tabela de Dados (Apenas Não Faturados)
+        const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
+            const t = (c.Tipo_Faturamento || '').toUpperCase();
+            return !(t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        });
+        const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente));
+
+        let fretesParaRelatorio = dadosGlobais.fretes.filter(f => idsNaoFaturados.has(f.ID_Cliente));
+
         if (dadosGlobais.startDate) fretesParaRelatorio = fretesParaRelatorio.filter(f => f.Data_Emissao.substring(0, 10) >= dadosGlobais.startDate);
         if (dadosGlobais.endDate) fretesParaRelatorio = fretesParaRelatorio.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
 
         const rows = fretesParaRelatorio.map(f => {
-            const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+            const cliente = clientesNaoFaturados.find(c => c.ID_Cliente == f.ID_Cliente);
             const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
             const obs = obterObservacao(cliente);
             return [
@@ -634,10 +654,10 @@ async function gerarRelatorioPDF() {
         });
 
         doc.autoTable({
-            startY: 65,
+            startY: 70,
             head: [['Cliente', 'CTe', 'Data', 'Valor', 'Status', 'Observação']],
             body: rows,
-            headStyles: { fillStyle: [13, 59, 102], textColor: 255, fontStyle: 'bold' },
+            headStyles: { fillColor: [13, 59, 102], textColor: 255, fontStyle: 'bold' },
             alternateRowStyles: { fillColor: [245, 245, 245] },
             styles: { fontSize: 8, cellPadding: 3 },
             columnStyles: {
@@ -647,19 +667,19 @@ async function gerarRelatorioPDF() {
         });
 
         // 4. Totais
-        const finalY = doc.lastAutoTable.finalY + 10;
+        const finalY = (doc.lastAutoTable.finalY || 70) + 10;
         const total = fretesParaRelatorio.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
-        doc.text(`VALOR TOTAL DO PERÍODO: R$ ${total.toFixed(2)}`, 14, finalY);
+        doc.text(`VALOR TOTAL PENDENTE: R$ ${total.toFixed(2)}`, 14, finalY);
 
         // 5. Rodapé
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
         doc.text("Documento gerado automaticamente pelo Sistema Gestor de Fretes - São João Encomendas", 105, 285, { align: 'center' });
 
-        doc.save(`Relatorio_Fretes_${new Date().getTime()}.pdf`);
+        doc.save(`Relatorio_Fretes_Nao_Faturados_${new Date().getTime()}.pdf`);
         mostrarMensagem('sucesso', 'PDF gerado com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar PDF:', error);
