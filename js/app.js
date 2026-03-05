@@ -593,21 +593,26 @@ async function gerarRelatorioPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // 1. Cabeçalho com Logo (Ajustado para logo.jpeg)
+        // 1. Cabeçalho com Logo (Fundo Branco para mesclar com o logo)
         try {
-            // Desenhar um fundo azul marinho no topo
-            doc.setFillColor(13, 59, 102);
+            // Desenhar um fundo branco no topo
+            doc.setFillColor(255, 255, 255);
             doc.rect(0, 0, 210, 45, 'F');
 
             // Adicionar a imagem da logo
-            // Nota: Usamos 10 mm de margem esquerda, 5 mm de topo, 40 mm de largura, 30 mm de altura aprox
             doc.addImage('assets/logo.jpeg', 'JPEG', 10, 5, 45, 30);
 
-            doc.setTextColor(255, 255, 255);
+            // Texto em Azul Marinho para contraste no fundo branco
+            doc.setTextColor(13, 59, 102);
             doc.setFontSize(20);
             doc.text("SÃO JOÃO ENCOMENDAS", 65, 20);
             doc.setFontSize(10);
             doc.text("RELATÓRIO DE PRESTAÇÃO DE CONTAS - FRETES PENDENTES", 65, 30);
+
+            // Linha decorativa
+            doc.setDrawColor(13, 59, 102);
+            doc.setLineWidth(0.5);
+            doc.line(10, 40, 200, 40);
         } catch (e) {
             console.warn("Logo não encontrada ou erro ao carregar:", e);
             doc.setFillColor(13, 59, 102);
