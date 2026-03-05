@@ -424,11 +424,11 @@ function renderizarTabelaTodos() {
 
     // REGRA: Mostrar apenas clientes que NÃO são faturados (mesma lógica do Não Faturado)
     fretesFiltrados = fretesFiltrados.filter(f => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString() == f.ID_Cliente.toString());
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === f.ID_Cliente.toString().trim());
         if (!cliente) return false;
 
         // Só filtramos fora se o tipo for explicitamente FATURADO (Empresas que não controlamos)
-        const t = (cliente.Tipo_Faturamento || '').toUpperCase();
+        const t = (obterValorPelaChave(cliente, 'Tipo_Faturamento') || '').toString().toUpperCase();
         const ehEmpresaFaturada = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
         return !ehEmpresaFaturada;
     });
@@ -532,18 +532,19 @@ function renderizarDashboard() {
         return !(t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
     });
 
-    const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente));
+    // IDs dos clientes controlados (Não Faturados)
+    const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente.toString().trim()));
 
-    // Filtrar fretes apenas desses clientes e dentro da data
-    const fretesNaoFaturados = fretesFiltrados.filter(f => idsNaoFaturados.has(f.ID_Cliente));
+    // Filtrar fretes apenas desses clientes
+    const fretesNaoFaturados = fretesFiltrados.filter(f => idsNaoFaturados.has(f.ID_Cliente.toString().trim()));
 
-    const fretesAbertos = fretesNaoFaturados.filter(f => f.Status_Pagamento === 'ABERTO');
+    const fretesAbertos = fretesNaoFaturados.filter(f => f.Status_Pagamento.toString().toUpperCase() === 'ABERTO');
     const totalAberto = fretesAbertos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const fretesPagos = fretesNaoFaturados.filter(f => f.Status_Pagamento === 'PAGO');
+    const fretesPagos = fretesNaoFaturados.filter(f => f.Status_Pagamento.toString().toUpperCase() === 'PAGO');
     const totalPago = fretesPagos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const qtdClientesPendentes = new Set(fretesAbertos.map(f => f.ID_Cliente)).size;
+    const qtdClientesPendentes = new Set(fretesAbertos.map(f => f.ID_Cliente.toString().trim())).size;
 
     const grid = document.querySelector('.dashboard-grid');
     grid.innerHTML = `
