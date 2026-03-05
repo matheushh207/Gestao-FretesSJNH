@@ -421,36 +421,36 @@ async function marcarPago(clienteId) {
 }
 
 function renderizarDashboard() {
-    // Melhorar cálculo considerando que FATURADO/FAT = PAGO
-    const fretesCompletos = dadosGlobais.fretes.map(f => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
-        const t = (cliente?.Tipo_Faturamento || '').toUpperCase();
-        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
-        return {
-            ...f,
-            statusReal: ehFaturado ? 'PAGO' : f.Status_Pagamento
-        };
+    // Pegar apenas clientes que NÃO são Faturados/Pagos
+    const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
+        const t = (c.Tipo_Faturamento || '').toUpperCase();
+        return !(t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
     });
 
-    const fretesAbertos = fretesCompletos.filter(f => f.statusReal === 'ABERTO');
+    const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente));
+
+    // Filtrar fretes apenas desses clientes
+    const fretesNaoFaturados = dadosGlobais.fretes.filter(f => idsNaoFaturados.has(f.ID_Cliente));
+
+    const fretesAbertos = fretesNaoFaturados.filter(f => f.Status_Pagamento === 'ABERTO');
     const totalAberto = fretesAbertos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const fretesPagos = fretesCompletos.filter(f => f.statusReal === 'PAGO');
+    const fretesPagos = fretesNaoFaturados.filter(f => f.Status_Pagamento === 'PAGO');
     const totalPago = fretesPagos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const qtdClientesAbertos = new Set(fretesAbertos.map(f => f.ID_Cliente)).size;
+    const qtdClientesPendentes = new Set(fretesAbertos.map(f => f.ID_Cliente)).size;
 
     const grid = document.querySelector('.dashboard-grid');
     grid.innerHTML = `
         <div class="card-stat highlight" style="border-top-color: #e74c3c;">
-            <h3>📂 TOTAL PENDENTE</h3>
+            <h3>📂 PENDENTE (NÃO FATURADOS)</h3>
             <p class="valor" style="color: #e74c3c">R$ ${totalAberto.toFixed(2)}</p>
-            <p class="sub-valor">📦 ${fretesAbertos.length} Documentos / ${qtdClientesAbertos} Clientes</p>
+            <p class="sub-valor">📦 ${fretesAbertos.length} Documentos / ${qtdClientesPendentes} Clientes</p>
         </div>
         <div class="card-stat" style="border-top-color: var(--verde);">
-            <h3>✅ TOTAL PAGO (MÊS)</h3>
+            <h3>✅ RECEBIDO (ESTA SEMANA)</h3>
             <p class="valor" style="color: var(--verde)">R$ ${totalPago.toFixed(2)}</p>
-            <p class="sub-valor">📦 ${fretesPagos.length} Documentos processados</p>
+            <p class="sub-valor">📦 ${fretesPagos.length} Documentos baixados</p>
         </div>
     `;
 
