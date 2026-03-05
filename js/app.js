@@ -176,6 +176,31 @@ function obterObservacao(cliente) {
     return '';
 }
 
+// Helper para buscar qualquer valor independente da grafia da chave
+function obterValorPelaChave(obj, chaveProcurada) {
+    if (!obj) return null;
+    const keys = Object.keys(obj);
+    const keyMatch = keys.find(k => {
+        const normalized = k.toString().trim().toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const target = chaveProcurada.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return normalized === target || normalized.includes(target);
+    });
+    return keyMatch ? obj[keyMatch] : null;
+}
+
+function formatarDataBR(dataStr) {
+    if (!dataStr) return '--';
+    try {
+        const data = new Date(dataStr);
+        if (isNaN(data.getTime())) return dataStr.split('T')[0].split('-').reverse().join('/');
+        return data.toLocaleDateString('pt-BR');
+    } catch (e) {
+        return dataStr;
+    }
+}
+
 function renderizarClientesPorTipo(tipo, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -216,7 +241,7 @@ function renderizarClientesPorTipo(tipo, containerId) {
         const tipoClass = tipo === 'FATURADO' ? 'fat' : 'nao-fat';
         card.className = `cliente-card ${tipoClass}`;
 
-        const linkComprovante = cliente.Link_Comprovante || cliente.link_comprovante;
+        const linkComprovante = obterValorPelaChave(cliente, 'Link_Comprovante');
         const iconesVoucher = linkComprovante ? `
             <div class="voucher-actions-inline" style="display: inline-flex; gap: 5px; margin-left: 8px;">
                 <span class="status-comprovante" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante" style="cursor:pointer;">👁️</span>
@@ -386,6 +411,15 @@ function renderizarTabelaTodos() {
         });
     }
 
+    // REGRA: Mostrar apenas clientes que NÃO são faturados (mesma lógica do Não Faturado)
+    fretesFiltrados = fretesFiltrados.filter(f => {
+        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+        if (!cliente) return false;
+        const t = (cliente.Tipo_Faturamento || '').toUpperCase();
+        const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
+        return !ehFaturado;
+    });
+
     if (dadosGlobais.filterStatus) {
         fretesFiltrados = fretesFiltrados.filter(f => f.Status_Pagamento === dadosGlobais.filterStatus);
     }
@@ -420,20 +454,19 @@ function renderizarTabelaTodos() {
         const ehFaturado = (t === 'FATURADO' || t === 'FAT' || t === 'PAGO');
 
         // Se o cliente for faturado, forçamos o status para PAGO na visualização
-        const statusParaExibir = ehFaturado ? 'PAGO' : item.status;
-        const classeStatus = statusParaExibir.toLowerCase();
+        const dataFormatada = formatarDataBR(item.data);
+        const tr = document.createElement('tr');
 
-        const linkComprovante = cliente?.Link_Comprovante || cliente?.link_comprovante;
+        const linkComprovante = obterValorPelaChave(cliente, 'Link_Comprovante');
         const btnComprovante = linkComprovante ? `
             <button class="btn btn-info" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante" style="background: #13c2c2; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">👁️</button>
             <button class="btn btn-danger" onclick="removerVoucher(${item.idCliente})" title="Remover Comprovante" style="background: #ff4d4f; color: white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px; border:none; border-radius:4px; cursor:pointer;">🗑️</button>
         ` : '';
 
-        const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${cliente?.Nome || 'Desconhecido'}</td>
             <td>${item.qtd} docs</td>
-            <td>${item.data}</td>
+            <td>${dataFormatada}</td>
             <td>R$ ${item.total.toFixed(2)}</td>
             <td><strong class="status-${classeStatus}">${statusParaExibir}</strong></td>
             <td>
@@ -507,7 +540,7 @@ function renderizarDashboard() {
             <p class="sub-valor">📦 ${fretesAbertos.length} Documentos / ${qtdClientesPendentes} Clientes</p>
         </div>
         <div class="card-stat" style="border-top-color: var(--verde);">
-            <h3>✅ RECEBIDO (ESTA SEMANA)</h3>
+            <h3>✅ RECEBIDO (BAIXADOS)</h3>
             <p class="valor" style="color: var(--verde)">R$ ${totalPago.toFixed(2)}</p>
             <p class="sub-valor">📦 ${fretesPagos.length} Documentos baixados</p>
         </div>
