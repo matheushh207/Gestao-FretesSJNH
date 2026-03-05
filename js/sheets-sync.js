@@ -98,6 +98,29 @@ async function atualizarFreteSheet(freteId, novosDados) {
     }
 }
 
+// ✅ ENVIAR ARQUIVO PARA O DRIVE
+async function enviarArquivoParaDrive(dadosArquivo) {
+    try {
+        console.log('📤 Enviando arquivo para o Drive...');
+
+        const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'cors',
+            body: JSON.stringify({
+                acao: 'upload_comprovante',
+                ...dadosArquivo
+            })
+        });
+
+        const resultado = await response.json();
+        console.log('✅ Upload concluído:', resultado);
+        return resultado;
+    } catch (error) {
+        console.error('❌ Erro no upload:', error);
+        throw error;
+    }
+}
+
 // ✅ EXPORTAR PARA GOOGLE SHEETS (Copiar/Colar Manual)
 function exportarParaGoogleSheets() {
     const clientesLocal = localStorage.getItem('clientes_importados');

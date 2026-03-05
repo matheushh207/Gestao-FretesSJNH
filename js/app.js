@@ -63,6 +63,12 @@ function inicializarEventos() {
     // Export e Recarregar
     document.getElementById('btnRecarregar').addEventListener('click', carregarDados);
     document.getElementById('btnExportarDados').addEventListener('click', exportarDados);
+
+    // Voucher Upload Events
+    document.getElementById('voucherUploadArea').addEventListener('click', () => {
+        document.getElementById('fileVoucher').click();
+    });
+    document.getElementById('fileVoucher').addEventListener('change', handleFileVoucher);
 }
 
 function abrirModalUpload() {
@@ -211,9 +217,11 @@ function renderizarClientesPorTipo(tipo, containerId) {
         const tipoClass = tipo === 'FATURADO' ? 'fat' : 'nao-fat';
         card.className = `cliente-card ${tipoClass}`;
 
+        const linkComprovante = cliente.Link_Comprovante || cliente.link_comprovante;
+
         card.innerHTML = `
             <div class="card-header-flex">
-                <h3>${cliente.Nome}</h3>
+                <h3>${cliente.Nome} ${linkComprovante ? `<span class="status-comprovante" onclick="window.open('${linkComprovante}', '_blank')" title="Ver Comprovante">👁️</span>` : ''}</h3>
                 <span class="id-badge">#${cliente.ID_Cliente}</span>
             </div>
             <div class="cliente-info">
@@ -226,6 +234,7 @@ function renderizarClientesPorTipo(tipo, containerId) {
             <div class="valor-aberto">R$ ${totalAberto.toFixed(2)}</div>
             <div class="cliente-actions">
                 <button class="btn btn-secondary" onclick="editarObservacao(${cliente.ID_Cliente})" title="Adicionar Observação">📝 OBS</button>
+                <button class="btn btn-voucher" onclick="abrirModalVoucher(${cliente.ID_Cliente})" title="Anexar Comprovante">📸 ANEXO</button>
                 ${tipo !== 'FATURADO' ?
                 `<button class="btn btn-info" onclick="verDocumentos(${cliente.ID_Cliente})" style="background: #722ed1;">📄 CTES</button>
                      <button class="btn btn-info" onclick="gerarCobranca(${cliente.ID_Cliente})" style="background: #1890ff;">📱 COBRAR</button>
@@ -500,7 +509,10 @@ function renderizarDashboard() {
 
     const progHtml = `
         <div class="progress-section" style="margin-top: 2rem; background: white; padding: 2rem; border-radius: 20px; box-shadow: var(--sombra);">
-            <h3 style="margin-bottom: 1rem; color: var(--azul-marinho);">📊 PERCENTUAL DE RECEBIMENTO</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="color: var(--azul-marinho); margin: 0;">📊 PERCENTUAL DE RECEBIMENTO</h3>
+                <button class="btn btn-pdf" onclick="gerarRelatorioPDF()">📥 EXPORTAR RELATÓRIO PDF</button>
+            </div>
             <div style="height: 35px; background: #eee; border-radius: 20px; overflow: hidden; display: flex; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
                 <div style="width: ${percentual}%; background: linear-gradient(90deg, var(--verde) 0%, var(--verde-claro) 100%); transition: width 1s ease-in-out;"></div>
             </div>
@@ -511,6 +523,150 @@ function renderizarDashboard() {
         </div>
     `;
     grid.insertAdjacentHTML('afterend', progHtml);
+}
+
+// ============================================
+// FUNÇÕES DE VOUCHER (UPLOAD COMPROVANTE)
+// ============================================
+let clienteVoucherAtual = null;
+
+function abrirModalVoucher(clienteId) {
+    clienteVoucherAtual = clienteId;
+    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
+    document.getElementById('voucherClienteNome').textContent = cliente.Nome;
+    document.getElementById('modalVoucher').classList.remove('hidden');
+}
+
+function fecharModalVoucher() {
+    document.getElementById('modalVoucher').classList.add('hidden');
+    document.getElementById('fileVoucher').value = '';
+    document.getElementById('voucherPreview').classList.add('hidden');
+    document.getElementById('btnConfirmarVoucher').disabled = true;
+    clienteVoucherAtual = null;
+}
+
+function handleFileVoucher(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('imgVoucherPreview').src = e.target.result;
+        document.getElementById('voucherPreview').classList.remove('hidden');
+        document.getElementById('btnConfirmarVoucher').disabled = false;
+        document.getElementById('btnConfirmarVoucher').onclick = () => confirmarVoucher(file);
+    };
+    reader.readAsDataURL(file);
+}
+
+async function confirmarVoucher(file) {
+    try {
+        mostrarCarregamento(true);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const base64 = e.target.result.split(',')[1];
+            const dados = {
+                clienteId: clienteVoucherAtual,
+                arquivo: base64,
+                tipo: file.type,
+                nome: `Comprovante_${clienteVoucherAtual}_${new Date().getTime()}.${file.name.split('.').pop()}`
+            };
+
+            await enviarArquivoParaDrive(dados);
+            mostrarMensagem('sucesso', 'Comprovante salvo com sucesso!');
+            fecharModalVoucher();
+            await carregarDados();
+        };
+        reader.readAsDataURL(file);
+    } catch (error) {
+        mostrarMensagem('erro', 'Erro ao salvar comprovante');
+    } finally {
+        mostrarCarregamento(false);
+    }
+}
+
+// ============================================
+// GERAÇÃO DE RELATÓRIO PDF (PRO)
+// ============================================
+async function gerarRelatorioPDF() {
+    try {
+        mostrarCarregamento(true);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // 1. Cabeçalho com Logo (Se existir logo.png em assets)
+        // Por enquanto usaremos texto premium caso a imagem demore
+        doc.setFillColor(13, 59, 102);
+        doc.rect(0, 0, 210, 40, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.text("SÃO JOÃO ENCOMENDAS", 105, 20, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text("RELATÓRIO DE PRESTAÇÃO DE CONTAS - FRETES", 105, 30, { align: 'center' });
+
+        // 2. Informações do Período
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        const periodo = (dadosGlobais.startDate && dadosGlobais.endDate)
+            ? `${dadosGlobais.startDate.split('-').reverse().join('/')} até ${dadosGlobais.endDate.split('-').reverse().join('/')}`
+            : 'Período Geral';
+        doc.text(`Período: ${periodo}`, 14, 50);
+        doc.text(`Data de Emissão: ${new Date().toLocaleString()}`, 14, 57);
+
+        // 3. Tabela de Dados (Usando apenas fretes filtrados)
+        let fretesParaRelatorio = dadosGlobais.fretes;
+        if (dadosGlobais.startDate) fretesParaRelatorio = fretesParaRelatorio.filter(f => f.Data_Emissao.substring(0, 10) >= dadosGlobais.startDate);
+        if (dadosGlobais.endDate) fretesParaRelatorio = fretesParaRelatorio.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
+
+        const rows = fretesParaRelatorio.map(f => {
+            const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == f.ID_Cliente);
+            const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
+            const obs = obterObservacao(cliente);
+            return [
+                cliente?.Nome || 'N/D',
+                f.Numero_CTE,
+                data,
+                `R$ ${parseFloat(f.Valor_Frete).toFixed(2)}`,
+                f.Status_Pagamento,
+                obs || '-'
+            ];
+        });
+
+        doc.autoTable({
+            startY: 65,
+            head: [['Cliente', 'CTe', 'Data', 'Valor', 'Status', 'Observação']],
+            body: rows,
+            headStyles: { fillStyle: [13, 59, 102], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 50 },
+                5: { cellWidth: 40 }
+            }
+        });
+
+        // 4. Totais
+        const finalY = doc.lastAutoTable.finalY + 10;
+        const total = fretesParaRelatorio.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
+
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text(`VALOR TOTAL DO PERÍODO: R$ ${total.toFixed(2)}`, 14, finalY);
+
+        // 5. Rodapé
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text("Documento gerado automaticamente pelo Sistema Gestor de Fretes - São João Encomendas", 105, 285, { align: 'center' });
+
+        doc.save(`Relatorio_Fretes_${new Date().getTime()}.pdf`);
+        mostrarMensagem('sucesso', 'PDF gerado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarMensagem('erro', 'Erro ao gerar PDF');
+    } finally {
+        mostrarCarregamento(false);
+    }
 }
 
 function mudarAba(novaAba) {

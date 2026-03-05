@@ -797,3 +797,37 @@ body {
         left: 10px;
     }
 }
+
+/* NOVOS ESTILOS */
+.status-comprovante {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--verde);
+    color: white;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.btn-pdf {
+    background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%) !important;
+    color: white !important;
+}
+
+.btn-pdf:hover {
+    background: linear-gradient(135deg, #cf1322 0%, #ff4d4f 100%) !important;
+}
+
+.btn-voucher {
+    background: #722ed1 !important;
+    color: white !important;
+}
+
+.btn-voucher:hover {
+    background: #9254de !important;
+}
