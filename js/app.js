@@ -184,6 +184,12 @@ function obterObservacao(cliente) {
     return '';
 }
 
+// Helper universal para evitar erros de undefined.toString()
+function safeStr(val) {
+    if (val === undefined || val === null) return '';
+    return val.toString().trim();
+}
+
 // Helper para buscar qualquer valor independente da grafia da chave
 function obterValorPelaChave(obj, chaveProcurada) {
     if (!obj) return null;
@@ -193,7 +199,7 @@ function obterValorPelaChave(obj, chaveProcurada) {
 
     // Lista de variações comuns para chaves importantes
     let variacoes = [target];
-    if (target.includes('comprovante')) variacoes.push('link', 'arquivo', 'compr', 'voucher', 'drive');
+    if (target.includes('comprovante')) variacoes.push('link', 'arquivo', 'compr', 'voucher', 'drive', 'foto');
     if (target.includes('tipo')) variacoes.push('faturamento', 'cat', 'classificacao');
 
     const keyMatch = keys.find(k => {
@@ -224,7 +230,7 @@ function renderizarClientesPorTipo(tipo, containerId) {
     // NAO-FATURADO pega todo o resto
     clientesFiltrados = clientesFiltrados.filter(c => {
         const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        // REGRA: Se conter "FAT", é faturado (Empresa). Se não, é o que controlamos.
+        // REGRA REFORÇADA: Se no PDF ou Planilha tiver "FAT", é faturado.
         const ehEmpresaFaturada = t.includes('FAT') || t === 'PAGO';
 
         if (tipo === 'FATURADO') return ehEmpresaFaturada;
@@ -232,16 +238,17 @@ function renderizarClientesPorTipo(tipo, containerId) {
     });
 
     if (dadosGlobais.searchTerm) {
+        const term = safeStr(dadosGlobais.searchTerm).toLowerCase();
         clientesFiltrados = clientesFiltrados.filter(c =>
-            c.Nome.toLowerCase().includes(dadosGlobais.searchTerm) ||
-            c.ID_Cliente.toString().trim() === dadosGlobais.searchTerm.trim()
+            safeStr(c.Nome).toLowerCase().includes(term) ||
+            safeStr(c.ID_Cliente) === term
         );
     }
 
     clientesFiltrados.forEach(cliente => {
         let fretes = (dadosGlobais.fretes || []).filter(f =>
-            f.ID_Cliente.toString().trim() === cliente.ID_Cliente.toString().trim() &&
-            f.Status_Pagamento.toString().toUpperCase() === 'ABERTO'
+            safeStr(f.ID_Cliente) === safeStr(cliente.ID_Cliente) &&
+            safeStr(f.Status_Pagamento).toUpperCase() === 'ABERTO'
         );
 
         // Filtro de Data
@@ -433,7 +440,7 @@ function renderizarTabelaTodos() {
 
     // REGRA: Mostrar apenas clientes que NÃO são faturados (os que controlamos)
     fretesFiltrados = fretesFiltrados.filter(f => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === f.ID_Cliente.toString().trim());
+        const cliente = dadosGlobais.clientes.find(c => safeStr(c.ID_Cliente) === safeStr(f.ID_Cliente));
         if (!cliente) return false;
 
         const t = (obterValorPelaChave(cliente, 'Tipo_Faturamento') || '').toString().toUpperCase();
@@ -470,8 +477,9 @@ function renderizarTabelaTodos() {
     });
 
     Object.values(agrupados).forEach(item => {
-        const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente.toString().trim() === item.idCliente.toString().trim());
-        const statusParaExibir = item.status.toString().toUpperCase();
+        const clienteId = safeStr(item.idCliente);
+        const cliente = dadosGlobais.clientes.find(c => safeStr(c.ID_Cliente) === clienteId);
+        const statusParaExibir = safeStr(item.status).toUpperCase();
         const classeStatus = statusParaExibir.toLowerCase();
 
         const dataFormatada = formatarDataBR(item.data);
@@ -494,7 +502,7 @@ function renderizarTabelaTodos() {
             <td>
                 ${btnComprovante}
                 ${(statusParaExibir === 'ABERTO') ?
-                `<button class="btn btn-secondary" onclick="marcarPago(${item.idCliente})">Dar Baixa</button>` :
+                `<button class="btn btn-secondary" onclick="marcarPago('${item.idCliente}')">Dar Baixa</button>` :
                 '✓ PAGO'}
             </td>
         `;
@@ -503,7 +511,7 @@ function renderizarTabelaTodos() {
 }
 
 async function marcarPago(clienteId) {
-    const fretes = dadosGlobais.fretes.filter(f => f.ID_Cliente == clienteId && f.Status_Pagamento === 'ABERTO');
+    const fretes = dadosGlobais.fretes.filter(f => safeStr(f.ID_Cliente) === safeStr(clienteId) && safeStr(f.Status_Pagamento).toUpperCase() === 'ABERTO');
     if (fretes.length === 0) return;
 
     abrirCustomModal("❓ CONFIRMAR BAIXA", `Deseja confirmar a baixa de ${fretes.length} documento(s) como PAGO?`, "CONFIRMAR", true, async (confirmou) => {
@@ -513,8 +521,7 @@ async function marcarPago(clienteId) {
                 for (const frete of fretes) {
                     await atualizarFreteSheet(frete.ID_Frete, { Status_Pagamento: 'PAGO' });
                 }
-                // REMOVIDO: Não devemos mudar o tipo do cliente para FATURADO ao dar baixa, 
-                // pois ele deixa de ser um cliente "Semanal" controlado para ser "Empresa"
+                // REGRA: Nunca mudar o Tipo_Faturamento aqui
                 mostrarMensagem('sucesso', 'Baixa realizada com sucesso!');
                 await carregarDados();
             } catch (error) {
@@ -543,18 +550,18 @@ function renderizarDashboard() {
     });
 
     // IDs dos clientes controlados (Não Faturados)
-    const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente.toString().trim()));
+    const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => safeStr(c.ID_Cliente)));
 
     // Filtrar fretes apenas desses clientes
-    const fretesNaoFaturados = fretesFiltrados.filter(f => idsNaoFaturados.has(f.ID_Cliente.toString().trim()));
+    const fretesNaoFaturados = fretesFiltrados.filter(f => idsNaoFaturados.has(safeStr(f.ID_Cliente)));
 
-    const fretesAbertos = fretesNaoFaturados.filter(f => f.Status_Pagamento.toString().toUpperCase() === 'ABERTO');
+    const fretesAbertos = fretesNaoFaturados.filter(f => safeStr(f.Status_Pagamento).toUpperCase() === 'ABERTO');
     const totalAberto = fretesAbertos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const fretesPagos = fretesNaoFaturados.filter(f => f.Status_Pagamento.toString().toUpperCase() === 'PAGO');
+    const fretesPagos = fretesNaoFaturados.filter(f => safeStr(f.Status_Pagamento).toUpperCase() === 'PAGO');
     const totalPago = fretesPagos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
-    const qtdClientesPendentes = new Set(fretesAbertos.map(f => f.ID_Cliente.toString().trim())).size;
+    const qtdClientesPendentes = new Set(fretesAbertos.map(f => safeStr(f.ID_Cliente))).size;
 
     const grid = document.querySelector('.dashboard-grid');
     grid.innerHTML = `
