@@ -13,7 +13,9 @@ let dadosGlobais = {
     fretes: [],
     filtroAtual: 'nao-faturado',
     searchTerm: '',
-    filterStatus: ''
+    filterStatus: '',
+    startDate: '',
+    endDate: ''
 };
 
 // INICIALIZAÇÃO
@@ -45,6 +47,16 @@ function inicializarEventos() {
 
     document.getElementById('filterStatus').addEventListener('change', (e) => {
         dadosGlobais.filterStatus = e.target.value;
+        renderizarDados();
+    });
+
+    document.getElementById('startDate').addEventListener('change', (e) => {
+        dadosGlobais.startDate = e.target.value;
+        renderizarDados();
+    });
+
+    document.getElementById('endDate').addEventListener('change', (e) => {
+        dadosGlobais.endDate = e.target.value;
         renderizarDados();
     });
 
@@ -181,9 +193,18 @@ function renderizarClientesPorTipo(tipo, containerId) {
     }
 
     clientesFiltrados.forEach(cliente => {
-        const fretes = (dadosGlobais.fretes || []).filter(f =>
+        let fretes = (dadosGlobais.fretes || []).filter(f =>
             f.ID_Cliente == cliente.ID_Cliente && f.Status_Pagamento === 'ABERTO'
         );
+
+        // Filtro de Data
+        if (dadosGlobais.startDate) {
+            fretes = fretes.filter(f => f.Data_Emissao.substring(0, 10) >= dadosGlobais.startDate);
+        }
+        if (dadosGlobais.endDate) {
+            fretes = fretes.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
+        }
+
         const totalAberto = fretes.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);
 
         const card = document.createElement('div');
@@ -355,6 +376,14 @@ function renderizarTabelaTodos() {
         fretesFiltrados = fretesFiltrados.filter(f => f.Status_Pagamento === dadosGlobais.filterStatus);
     }
 
+    // Filtro de Data
+    if (dadosGlobais.startDate) {
+        fretesFiltrados = fretesFiltrados.filter(f => f.Data_Emissao.substring(0, 10) >= dadosGlobais.startDate);
+    }
+    if (dadosGlobais.endDate) {
+        fretesFiltrados = fretesFiltrados.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
+    }
+
     const agrupados = {};
     fretesFiltrados.forEach(f => {
         const key = `${f.ID_Cliente}_${f.Status_Pagamento}`;
@@ -421,6 +450,15 @@ async function marcarPago(clienteId) {
 }
 
 function renderizarDashboard() {
+    // Aplicar Filtro de Data nos Fretes primeiro
+    let fretesFiltrados = dadosGlobais.fretes;
+    if (dadosGlobais.startDate) {
+        fretesFiltrados = fretesFiltrados.filter(f => f.Data_Emissao.substring(0, 10) >= dadosGlobais.startDate);
+    }
+    if (dadosGlobais.endDate) {
+        fretesFiltrados = fretesFiltrados.filter(f => f.Data_Emissao.substring(0, 10) <= dadosGlobais.endDate);
+    }
+
     // Pegar apenas clientes que NÃO são Faturados/Pagos
     const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
         const t = (c.Tipo_Faturamento || '').toUpperCase();
@@ -429,8 +467,8 @@ function renderizarDashboard() {
 
     const idsNaoFaturados = new Set(clientesNaoFaturados.map(c => c.ID_Cliente));
 
-    // Filtrar fretes apenas desses clientes
-    const fretesNaoFaturados = dadosGlobais.fretes.filter(f => idsNaoFaturados.has(f.ID_Cliente));
+    // Filtrar fretes apenas desses clientes e dentro da data
+    const fretesNaoFaturados = fretesFiltrados.filter(f => idsNaoFaturados.has(f.ID_Cliente));
 
     const fretesAbertos = fretesNaoFaturados.filter(f => f.Status_Pagamento === 'ABERTO');
     const totalAberto = fretesAbertos.reduce((sum, f) => sum + parseFloat(f.Valor_Frete || 0), 0);

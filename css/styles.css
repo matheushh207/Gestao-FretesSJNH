@@ -364,6 +364,15 @@ body {
     min-width: 250px;
 }
 
+.date-filters {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.date-filters .input-filter {
+    min-width: 140px;
+}
+
 /* ============ TAB PANE ============ */
 .tab-pane {
     display: none;

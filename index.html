@@ -89,7 +89,11 @@
                 <!-- SEARCH & FILTERS -->
                 <div class="search-filters">
                     <input type="text" id="searchCliente" placeholder="🔍 Buscar cliente..." class="input-search">
-                    <select id="filterStatus" class="input-filter">
+                    <div class="date-filters">
+                        <input type="date" id="startDate" class="input-filter" title="Data Inicial">
+                        <input type="date" id="endDate" class="input-filter" title="Data Final">
+                    </div>
+                    <select id="filterStatus" class="input-filter" style="min-width: 150px;">
                         <option value="">Todos os Status</option>
                         <option value="ABERTO">ABERTO</option>
                         <option value="PAGO">PAGO</option>
