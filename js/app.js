@@ -226,12 +226,15 @@ function renderizarClientesPorTipo(tipo, containerId) {
     if (!container) return;
     container.innerHTML = '';
 
-    // Lógica: FATURADO pega quem tem Tipo_Faturamento === 'FATURADO'
+    // Inicializar working array
+    let clientesFiltrados = [...dadosGlobais.clientes];
+
+    // Lógica: FATURADO pega quem tem Tipo_Faturamento que CONTÉM 'FAT'
     // NAO-FATURADO pega todo o resto
     clientesFiltrados = clientesFiltrados.filter(c => {
-        const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        // REGRA REFORÇADA: Se no PDF ou Planilha tiver "FAT", é faturado.
-        const ehEmpresaFaturada = t.includes('FAT') || t === 'PAGO';
+        const t = safeStr(obterValorPelaChave(c, 'Tipo_Faturamento')).toUpperCase();
+        // REGRA ABSOLUTA: Se conter "FAT", é faturado. Caso contrário (vazio, semanal, etc), NÃO é faturado.
+        const ehEmpresaFaturada = t.includes('FAT');
 
         if (tipo === 'FATURADO') return ehEmpresaFaturada;
         return !ehEmpresaFaturada;
@@ -443,8 +446,8 @@ function renderizarTabelaTodos() {
         const cliente = dadosGlobais.clientes.find(c => safeStr(c.ID_Cliente) === safeStr(f.ID_Cliente));
         if (!cliente) return false;
 
-        const t = (obterValorPelaChave(cliente, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        const ehEmpresaFaturada = t.includes('FAT') || t === 'PAGO';
+        const t = safeStr(obterValorPelaChave(cliente, 'Tipo_Faturamento')).toUpperCase();
+        const ehEmpresaFaturada = t.includes('FAT');
         return !ehEmpresaFaturada;
     });
 
@@ -545,8 +548,8 @@ function renderizarDashboard() {
 
     // Pegar apenas clientes que NÃO são Empresas Faturadas (os que controlamos)
     const clientesNaoFaturados = dadosGlobais.clientes.filter(c => {
-        const t = (obterValorPelaChave(c, 'Tipo_Faturamento') || '').toString().toUpperCase();
-        return !(t.includes('FAT') || t === 'PAGO');
+        const t = safeStr(obterValorPelaChave(c, 'Tipo_Faturamento')).toUpperCase();
+        return !t.includes('FAT');
     });
 
     // IDs dos clientes controlados (Não Faturados)
