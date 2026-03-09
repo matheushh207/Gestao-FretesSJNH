@@ -389,13 +389,44 @@ function verDocumentos(clienteId) {
 
     const listaHtml = fretes.map(f => {
         const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
-        return `<div style="padding: 10px; background: #f0f2f5; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid var(--azul-claro);">
-            <strong>📄 CTe: ${f.Numero_CTE}</strong><br>
-            📅 Data: ${data} | 💰 Valor: <strong>R$ ${parseFloat(f.Valor_Frete).toFixed(2)}</strong>
+        return `<div style="padding: 12px; background: #f0f2f5; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid var(--azul-claro); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>📄 CTe: ${f.Numero_CTE}</strong><br>
+                📅 Data: ${data} | 💰 Valor: <strong>R$ ${parseFloat(f.Valor_Frete).toFixed(2)}</strong>
+            </div>
+            <button class="btn btn-primary" onclick="marcarFretePago('${f.ID_Frete}', '${f.Numero_CTE}')" style="padding: 5px 10px; font-size: 0.8rem;">BAIXAR</button>
         </div>`;
     }).join('');
 
     abrirCustomModal(`📄 DOCUMENTOS - ${cliente.Nome}`, `<div style="max-height: 400px; overflow-y: auto; padding-right: 5px;">${listaHtml}</div>`);
+}
+
+async function marcarFretePago(freteId, numeroCTE) {
+    abrirCustomModal("❓ CONFIRMAR BAIXA INDIVIDUAL", `Deseja marcar o CTe **${numeroCTE}** como PAGO?`, "CONFIRMAR", true, async (confirmou) => {
+        if (confirmou) {
+            try {
+                mostrarCarregamento(true);
+                await atualizarFreteSheet(freteId, { Status_Pagamento: 'PAGO' });
+                mostrarMensagem('sucesso', `CTe ${numeroCTE} baixado com sucesso!`);
+                await carregarDados();
+
+                // Se ainda houver fretes abertos, reabre o modal de documentos
+                const fretesRestantes = dadosGlobais.fretes.filter(f =>
+                    f.ID_Cliente == dadosGlobais.fretes.find(fr => fr.ID_Frete == freteId).ID_Cliente &&
+                    f.Status_Pagamento === 'ABERTO'
+                );
+
+                if (fretesRestantes.length > 0) {
+                    const clienteId = fretesRestantes[0].ID_Cliente;
+                    verDocumentos(clienteId);
+                }
+            } catch (error) {
+                mostrarMensagem('erro', 'Erro ao processar baixa do CTe');
+            } finally {
+                mostrarCarregamento(false);
+            }
+        }
+    });
 }
 
 async function editarObservacao(clienteId) {
