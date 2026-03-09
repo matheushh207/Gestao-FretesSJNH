@@ -134,9 +134,20 @@ async function carregarDados() {
         // Tentar buscar via GET primeiro (que agora trataremos no script)
         console.log('🔄 Iniciando carregamento de dados...');
         dadosGlobais.clientes = await buscarDadosSheet('Clientes');
-        dadosGlobais.fretes = await buscarDadosSheet('Fretes');
+        // Deduplicação de Fretes: Priorizar PAGO sobre ABERTO se houver o mesmo CTe para o mesmo cliente
+        const fretesUnicos = {};
+        dadosGlobais.fretes.forEach(f => {
+            const key = `${safeStr(f.ID_Cliente)}_${safeStr(f.Numero_CTE)}`;
+            const statusAtual = safeStr(f.Status_Pagamento).toUpperCase();
 
-        console.log('✅ Dados carregados:', {
+            // Se ainda não temos esse CTe, ou se o que temos é ABERTO e o novo é PAGO, atualizamos
+            if (!fretesUnicos[key] || (safeStr(fretesUnicos[key].Status_Pagamento).toUpperCase() === 'ABERTO' && statusAtual === 'PAGO')) {
+                fretesUnicos[key] = f;
+            }
+        });
+        dadosGlobais.fretes = Object.values(fretesUnicos);
+
+        console.log('✅ Dados carregados e deduplicados:', {
             clientes: dadosGlobais.clientes.length,
             fretes: dadosGlobais.fretes.length
         });
