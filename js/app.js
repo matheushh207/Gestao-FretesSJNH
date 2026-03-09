@@ -276,6 +276,12 @@ function renderizarClientesPorTipo(tipo, containerId) {
             </div>
         ` : '';
 
+        // Pegar todas as observações dos fretes em aberto deste cliente para mostrar no card
+        const obsCTes = fretes
+            .map(f => obterObservacao(f))
+            .filter(obs => obs !== '')
+            .join(' | ');
+
         card.innerHTML = `
             <div class="card-header-flex">
                 <h3>${cliente.Nome} ${iconesVoucher}</h3>
@@ -285,17 +291,16 @@ function renderizarClientesPorTipo(tipo, containerId) {
                 <p>📍 <strong>Cidade:</strong> ${cliente.Cidade}</p>
                 <p>📄 <strong>Documentos:</strong> ${fretes.length} pendentes</p>
                 <div class="obs-area" style="background: #fffbe6; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; border-left: 3px solid #ffe58f; font-size: 0.85rem; min-height: 30px;">
-                    <strong>Obs:</strong> ${obterObservacao(cliente) || '<i>Sem observação</i>'}
+                    <strong>Obs Pendentes:</strong> ${obsCTes || '<i>Sem observações nos CTes</i>'}
                 </div>
             </div>
             <div class="valor-aberto">R$ ${totalAberto.toFixed(2)}</div>
             <div class="cliente-actions">
-                <button class="btn btn-secondary" onclick="editarObservacao(${cliente.ID_Cliente})" title="Adicionar Observação">📝 OBS</button>
                 <button class="btn btn-voucher" onclick="abrirModalVoucher(${cliente.ID_Cliente})" title="Anexar Comprovante">📸 ANEXO</button>
                 ${tipo !== 'FATURADO' ?
                 `<button class="btn btn-info" onclick="verDocumentos(${cliente.ID_Cliente})" style="background: #722ed1;">📄 CTES</button>
                      <button class="btn btn-info" onclick="gerarCobranca(${cliente.ID_Cliente})" style="background: #1890ff;">📱 COBRAR</button>
-                     <button class="btn btn-primary" onclick="marcarPago(${cliente.ID_Cliente})" style="width: 100%; margin-top: 0.5rem;">✓ BAIXA</button>`
+                     <button class="btn btn-primary" onclick="marcarPago(${cliente.ID_Cliente})" style="width: 100%; margin-top: 0.5rem;">✓ BAIXA TOTAL</button>`
                 : '<span style="color: var(--verde); font-weight: bold; width: 100%; text-align: center;">✓ PROCESSADO</span>'
             }
             </div>
@@ -365,12 +370,12 @@ function gerarCobranca(clienteId) {
     const listaCtes = fretes.map(f => {
         const dataApenas = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
         const valorIndividual = parseFloat(f.Valor_Frete || 0).toFixed(2);
-        return `📄 CTe: ${f.Numero_CTE} (${dataApenas}) - *R$ ${valorIndividual}*`;
+        const obsFrete = obterObservacao(f);
+        const obsTextoStr = obsFrete ? ` - *Obs:* ${obsFrete}` : '';
+        return `📄 CTe: ${f.Numero_CTE} (${dataApenas}) - *R$ ${valorIndividual}*${obsTextoStr}`;
     }).join('\n');
 
-    const observacao = obterObservacao(cliente);
-    const obsTexto = observacao ? `\n\n*OBS:* ${observacao}` : '';
-    const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}${obsTexto}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
+    const mensagem = `Olá ${cliente.Nome}, seguem os fretes pendentes para pagamento:\n\n${listaCtes}\n\n*Total a pagar: R$ ${total.toFixed(2)}*\n\n🔑 PIX para pagamento: poa@saojoaoencomendas.com.br\n🏢 (SÃO JOÃO ENCOMENDAS)\n\nPor favor, favor enviar o comprovante após o pagamento.`;
 
     navigator.clipboard.writeText(mensagem).then(() => {
         mostrarMensagem('sucesso', 'Mensagem copiada!');
@@ -389,16 +394,57 @@ function verDocumentos(clienteId) {
 
     const listaHtml = fretes.map(f => {
         const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
-        return `<div style="padding: 12px; background: #f0f2f5; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid var(--azul-claro); display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <strong>📄 CTe: ${f.Numero_CTE}</strong><br>
-                📅 Data: ${data} | 💰 Valor: <strong>R$ ${parseFloat(f.Valor_Frete).toFixed(2)}</strong>
+        const obs = obterObservacao(f);
+        return `<div style="padding: 12px; background: #f0f2f5; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid var(--azul-claro);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <div>
+                    <strong>📄 CTe: ${f.Numero_CTE}</strong><br>
+                    📅 Data: ${data} | 💰 Valor: <strong>R$ ${parseFloat(f.Valor_Frete).toFixed(2)}</strong>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-secondary" onclick="editarObservacaoFrete('${f.ID_Frete}', '${f.Numero_CTE}')" style="padding: 5px 10px; font-size: 0.8rem; background: #faad14; color: white; border:none; border-radius:4px; cursor:pointer;">📝 OBS</button>
+                    <button class="btn btn-primary" onclick="marcarFretePago('${f.ID_Frete}', '${f.Numero_CTE}')" style="padding: 5px 10px; font-size: 0.8rem;">BAIXAR</button>
+                </div>
             </div>
-            <button class="btn btn-primary" onclick="marcarFretePago('${f.ID_Frete}', '${f.Numero_CTE}')" style="padding: 5px 10px; font-size: 0.8rem;">BAIXAR</button>
+            <div style="font-size: 0.85rem; color: #666; font-style: italic; background: #fff; padding: 5px 8px; border-radius: 6px;">
+                <strong>Obs:</strong> ${obs || 'Sem observação'}
+            </div>
         </div>`;
     }).join('');
 
     abrirCustomModal(`📄 DOCUMENTOS - ${cliente.Nome}`, `<div style="max-height: 400px; overflow-y: auto; padding-right: 5px;">${listaHtml}</div>`);
+}
+
+async function editarObservacaoFrete(freteId, numeroCTE) {
+    const frete = dadosGlobais.fretes.find(f => f.ID_Frete == freteId);
+
+    const corpoHtml = `
+        <p style="margin-bottom: 10px;">Digite a observação para o CTe <strong>${numeroCTE}</strong>:</p>
+        <textarea id="promptObsFrete" class="input-filter" style="width: 100%; height: 100px; padding: 10px; border-radius: 15px;">${obterObservacao(frete)}</textarea>
+    `;
+
+    abrirCustomModal("📝 EDITAR OBSERVAÇÃO DO CTE", corpoHtml, "SALVAR", true, async (confirmou) => {
+        if (confirmou) {
+            const novaObs = document.getElementById('promptObsFrete').value;
+            try {
+                mostrarCarregamento(true);
+                await atualizarFreteSheet(freteId, {
+                    Observacao: novaObs,
+                    'Observação': novaObs
+                });
+                mostrarMensagem('sucesso', 'Observação salva no CTe!');
+                await carregarDados();
+
+                // Reabre o modal de documentos para mostrar a nova obs
+                const clienteId = dadosGlobais.fretes.find(f => f.ID_Frete == freteId).ID_Cliente;
+                verDocumentos(clienteId);
+            } catch (error) {
+                mostrarMensagem('erro', 'Erro ao salvar observação');
+            } finally {
+                mostrarCarregamento(false);
+            }
+        }
+    });
 }
 
 async function marcarFretePago(freteId, numeroCTE) {
@@ -422,36 +468,6 @@ async function marcarFretePago(freteId, numeroCTE) {
                 }
             } catch (error) {
                 mostrarMensagem('erro', 'Erro ao processar baixa do CTe');
-            } finally {
-                mostrarCarregamento(false);
-            }
-        }
-    });
-}
-
-async function editarObservacao(clienteId) {
-    const cliente = dadosGlobais.clientes.find(c => c.ID_Cliente == clienteId);
-
-    // Para simplificar o prompt customizado sem criar um input complexo agora,
-    // vamos usar um modal com um campo de texto simples inserido no body.
-    const corpoHtml = `
-        <p style="margin-bottom: 10px;">Digite a nova observação para <strong>${cliente.Nome}</strong>:</p>
-        <textarea id="promptObs" class="input-filter" style="width: 100%; height: 100px; padding: 10px; border-radius: 15px;">${obterObservacao(cliente)}</textarea>
-    `;
-
-    abrirCustomModal("📝 EDITAR OBSERVAÇÃO", corpoHtml, "SALVAR", true, async (confirmou) => {
-        if (confirmou) {
-            const novaObs = document.getElementById('promptObs').value;
-            try {
-                mostrarCarregamento(true);
-                await atualizarClienteSheet(clienteId, {
-                    Observacao: novaObs,
-                    'Observação': novaObs
-                });
-                mostrarMensagem('sucesso', 'Observação salva!');
-                await carregarDados();
-            } catch (error) {
-                mostrarMensagem('erro', 'Erro ao salvar observação');
             } finally {
                 mostrarCarregamento(false);
             }
@@ -782,7 +798,7 @@ async function gerarRelatorioPDF() {
         const rows = fretesParaRelatorio.map(f => {
             const cliente = clientesNaoFaturados.find(c => c.ID_Cliente == f.ID_Cliente);
             const data = f.Data_Emissao.split('T')[0].split('-').reverse().join('/');
-            const obs = obterObservacao(cliente);
+            const obs = obterObservacao(f);
             return [
                 cliente?.Nome || 'N/D',
                 f.Numero_CTE,
